@@ -1,0 +1,57 @@
+/*
+ * Kuali Coeus, a comprehensive research administration system for higher education.
+ *
+ * Copyright 2005-2016 Kuali, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package org.kuali.kra.irb.drools.rules;
+
+import org.kuali.kra.irb.actions.submit.ProtocolActionFollowupMapping;
+
+function void setIsOpenForFollowup(ProtocolActionFollowupMapping mapping, boolean isOpenForFollowup) {
+    mapping.setIsOpenForFollowup(isOpenForFollowup);
+}
+
+rule "Committee Decision -> Approve"
+salience 100
+when
+    mapping : ProtocolActionFollowupMapping(protocolActionTypeCode == "204", committeeDecisionMotionTypeCode == "1")
+then    
+    setIsOpenForFollowup(mapping, true);
+end
+
+rule "Committee Decision -> Disapprove"
+salience 100
+when
+    mapping : ProtocolActionFollowupMapping(protocolActionTypeCode == "304", committeeDecisionMotionTypeCode == "2")
+then    
+    setIsOpenForFollowup(mapping, true);
+end
+
+rule "Committee Decision -> Return for SMR"
+salience 100
+when
+    mapping : ProtocolActionFollowupMapping(protocolActionTypeCode == "203", committeeDecisionMotionTypeCode == "3")
+then    
+    setIsOpenForFollowup(mapping, true);
+end
+
+rule "Committee Decision -> Return for SRR"
+salience 100
+when
+    mapping : ProtocolActionFollowupMapping(protocolActionTypeCode == "202", committeeDecisionMotionTypeCode == "4")
+then    
+    setIsOpenForFollowup(mapping, true);
+end

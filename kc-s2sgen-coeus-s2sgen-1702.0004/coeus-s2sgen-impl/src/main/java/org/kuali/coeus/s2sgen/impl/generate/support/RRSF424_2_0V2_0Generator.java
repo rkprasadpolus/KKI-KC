@@ -1,0 +1,1007 @@
+/*
+ * Kuali Coeus, a comprehensive research administration system for higher education.
+ *
+ * Copyright 2005-2016 Kuali, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package org.kuali.coeus.s2sgen.impl.generate.support;
+
+import gov.grants.apply.forms.rrSF42420V20.*;
+import gov.grants.apply.forms.rrSF42420V20.RRSF42420Document.RRSF42420;
+import gov.grants.apply.forms.rrSF42420V20.RRSF42420Document.RRSF42420.*;
+import gov.grants.apply.forms.rrSF42420V20.RRSF42420Document.RRSF42420.ApplicantInfo.ContactPersonInfo;
+import gov.grants.apply.forms.rrSF42420V20.RRSF42420Document.RRSF42420.ApplicantType.SmallBusinessOrganizationType;
+import gov.grants.apply.forms.rrSF42420V20.RRSF42420Document.RRSF42420.ApplicantType.SmallBusinessOrganizationType.IsSociallyEconomicallyDisadvantaged;
+import gov.grants.apply.forms.rrSF42420V20.RRSF42420Document.RRSF42420.ApplicantType.SmallBusinessOrganizationType.IsWomenOwned;
+import gov.grants.apply.system.attachmentsV10.AttachedFileDataType;
+import gov.grants.apply.system.globalLibraryV20.AddressDataType;
+import gov.grants.apply.system.globalLibraryV20.ApplicantTypeCodeDataType;
+import gov.grants.apply.system.globalLibraryV20.OrganizationDataType;
+import gov.grants.apply.system.globalLibraryV20.YesNoDataType;
+import gov.grants.apply.system.universalCodesV20.CountryCodeDataType;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.xmlbeans.XmlObject;
+import org.kuali.coeus.common.api.person.KcPersonContract;
+import org.kuali.coeus.common.api.person.KcPersonRepositoryService;
+import org.kuali.coeus.common.api.org.OrganizationContract;
+import org.kuali.coeus.common.api.ynq.YnqConstant;
+import org.kuali.coeus.common.questionnaire.api.answer.AnswerHeaderContract;
+import org.kuali.coeus.common.budget.api.core.BudgetContract;
+import org.kuali.coeus.common.budget.api.income.BudgetProjectIncomeContract;
+import org.kuali.coeus.common.budget.api.nonpersonnel.BudgetLineItemCalculatedAmountContract;
+import org.kuali.coeus.common.budget.api.nonpersonnel.BudgetLineItemContract;
+import org.kuali.coeus.common.budget.api.period.BudgetPeriodContract;
+import org.kuali.coeus.common.api.rolodex.RolodexContract;
+import org.kuali.coeus.common.api.sponsor.SponsorContract;
+import org.kuali.coeus.common.api.unit.UnitContract;
+import org.kuali.coeus.common.api.unit.UnitRepositoryService;
+import org.kuali.coeus.propdev.api.budget.ProposalDevelopmentBudgetExtContract;
+import org.kuali.coeus.propdev.api.budget.modular.BudgetModularIdcContract;
+import org.kuali.coeus.propdev.api.core.DevelopmentProposalContract;
+import org.kuali.coeus.propdev.api.location.ProposalSiteContract;
+import org.kuali.coeus.propdev.api.person.ProposalPersonContract;
+import org.kuali.coeus.propdev.api.s2s.S2sOpportunityContract;
+import org.kuali.coeus.propdev.api.core.ProposalDevelopmentDocumentContract;
+import org.kuali.coeus.s2sgen.impl.generate.FormVersion;
+
+import org.kuali.coeus.sys.api.model.ScaleTwoDecimal;
+import org.kuali.coeus.s2sgen.api.core.ConfigurationConstants;
+import org.kuali.coeus.propdev.api.attachment.NarrativeContract;
+import org.kuali.coeus.s2sgen.impl.generate.FormGenerator;
+import org.kuali.coeus.s2sgen.impl.person.DepartmentalPersonDto;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+
+import java.math.BigDecimal;
+import java.util.*;
+
+/**
+ * Class for generating the XML object for grants.gov RRSF424V1_0. Form is
+ * generated using XMLBean classes and is based on RRSF424V1_2 schema.
+ *
+ * @author Kuali Research Administration Team (kualidev@oncourse.iu.edu)
+ */
+@FormGenerator("RRSF424_2_0V2_0Generator")
+public class RRSF424_2_0V2_0Generator extends RRSF424BaseGenerator {
+	private static final int CFDA_TITLE_MAX_LENGTH = 119;
+	private static final int PROJECT_TITLE_MAX_LENGTH = 200;
+
+	private DepartmentalPersonDto departmentalPerson;
+	protected static final int RRSF424_Cover_Letter = 139;
+    private List<? extends AnswerHeaderContract> answerHeaders;
+
+    @Value("http://apply.grants.gov/forms/RR_SF424_2_0-V2.0")
+    private String namespace;
+
+    @Value("RR_SF424_2_0-V2.0")
+    private String formName;
+
+    @Value("classpath:org/kuali/coeus/s2sgen/impl/generate/support/stylesheet/RR_SF424_2_0-V2.0.fo.xsl")
+    private Resource stylesheet;
+
+    @Value("gov.grants.apply.forms.rrSF42420V20")
+    private String packageName;
+
+    @Value("120")
+    private int sortIndex;
+
+    @Autowired
+    @Qualifier("kcPersonRepositoryService")
+    private KcPersonRepositoryService kcPersonRepositoryService;
+
+    @Autowired
+    @Qualifier("unitRepositoryService")
+    private UnitRepositoryService unitRepositoryService;
+
+	/**
+	 *
+	 * This method gives information of applications that are used in RRSF424
+	 *
+	 * @return rrSF424Document {@link XmlObject} of type RRSF424Document.
+	 */
+	private RRSF42420Document getRRSF424() {
+        answerHeaders = getPropDevQuestionAnswerService().getQuestionnaireAnswerHeaders(pdDoc.getDevelopmentProposal().getProposalNumber());
+        RRSF42420Document rrSF424Document = RRSF42420Document.Factory
+				.newInstance();
+		RRSF42420 rrsf42420 = RRSF42420.Factory.newInstance();
+		rrsf42420.setFormVersion(FormVersion.v2_0.getVersion());
+		rrsf42420.setSubmittedDate(Calendar.getInstance());
+		if(getSubmissionTypeCode() != null){
+		    rrsf42420.setSubmissionTypeCode(SubmissionTypeDataType.Enum.forInt(Integer.parseInt(getSubmissionTypeCode())));
+		}
+		rrsf42420.setStateID(getRolodexState());
+		rrsf42420.setApplicantInfo(getApplicationInfo());
+		rrsf42420.setEmployerID(getEmployerId());
+		rrsf42420.setApplicantType(getApplicantType());
+		if(getAgencyRoutingNumber()!=null){
+		    rrsf42420.setAgencyRoutingNumber(getAgencyRoutingNumber());
+	    }
+		if(getGGTrackingID() != null){
+		rrsf42420.setGGTrackingID(getGGTrackingID());
+		}
+		rrsf42420.setApplicationType(getApplicationType());
+		rrsf42420.setApplicantID(pdDoc.getDevelopmentProposal()
+				.getProposalNumber());
+		rrsf42420.setFederalAgencyName(getFederalAgencyName());
+		rrsf42420.setProjectTitle(getProjectTitle());
+		rrsf42420.setProposedProjectPeriod(getProjectPeriod());
+		rrsf42420.setCongressionalDistrict(getCongDistrict());
+		if(pdDoc.getDevelopmentProposal().getCfdaNumber()!=null){
+		    rrsf42420.setCFDANumber(pdDoc.getDevelopmentProposal().getCfdaNumber());
+		}
+        String activityTitle = getActivityTitle();
+        if (!StringUtils.isEmpty(activityTitle)) {
+            rrsf42420.setActivityTitle(activityTitle);
+        }
+		setFederalId(rrsf42420);
+		rrsf42420.setPDPIContactInfo(getPDPI());
+		rrsf42420.setEstimatedProjectFunding(getProjectFunding());
+		rrsf42420.setTrustAgree(YesNoDataType.Y_YES);
+		rrsf42420.setStateReview(getStateReview());
+		rrsf42420.setAORInfo(getAORInfoType());
+		rrsf42420.setAORSignature(getAORSignature());
+		rrsf42420.setAORSignedDate(Calendar.getInstance());
+		setPreApplicationAttachment(rrsf42420);
+		setSFLLLAttachment(rrsf42420);
+		setCoverLetterAttachment(rrsf42420);
+		rrSF424Document.setRRSF42420(rrsf42420);
+		return rrSF424Document;
+	}
+
+	/**
+	 *
+	 * This method is to get estimated project funds for RRSF424
+	 *
+	 * @return EstimatedProjectFunding estimated total cost for the project.
+	 */
+	private EstimatedProjectFunding getProjectFunding() {
+		EstimatedProjectFunding funding = EstimatedProjectFunding.Factory
+				.newInstance();
+		funding.setTotalEstimatedAmount(BigDecimal.ZERO);
+		funding.setTotalNonfedrequested(BigDecimal.ZERO);
+		funding.setTotalfedNonfedrequested(BigDecimal.ZERO);
+		funding.setEstimatedProgramIncome(BigDecimal.ZERO);
+		boolean hasBudgetLineItem = false;
+
+        ProposalDevelopmentBudgetExtContract budget = s2SCommonBudgetService.getBudget(pdDoc.getDevelopmentProposal());
+        if (budget != null) {
+
+            ScaleTwoDecimal totalCost = ScaleTwoDecimal.ZERO;
+
+            if (budget.getModularBudgetFlag()) {
+                ScaleTwoDecimal fundsRequested = ScaleTwoDecimal.ZERO;
+                ScaleTwoDecimal totalDirectCost = ScaleTwoDecimal.ZERO;
+                // get modular budget amounts instead of budget detail amounts
+                for (BudgetPeriodContract budgetPeriod : budget.getBudgetPeriods()) {
+                    totalDirectCost = totalDirectCost.add(budgetPeriod
+                            .getBudgetModular().getTotalDirectCost());
+                    for (BudgetModularIdcContract budgetModularIdc : budgetPeriod
+                            .getBudgetModular().getBudgetModularIdcs()) {
+                        fundsRequested = fundsRequested.add(budgetModularIdc
+                                .getFundsRequested());
+                    }
+                }
+                totalCost = totalCost.add(totalDirectCost);
+                totalCost = totalCost.add(fundsRequested);
+            } else {
+          	   totalCost=budget.getTotalCost();
+            }
+
+            ScaleTwoDecimal fedNonFedCost = totalCost;
+            ScaleTwoDecimal costSharingAmount = ScaleTwoDecimal.ZERO;
+
+            for (BudgetPeriodContract budgetPeriod : budget.getBudgetPeriods()) {
+                for (BudgetLineItemContract lineItem : budgetPeriod.getBudgetLineItems()) {
+                    hasBudgetLineItem = true;
+                    if (budget.getSubmitCostSharingFlag() && lineItem.getSubmitCostSharingFlag()) {
+                        costSharingAmount =  costSharingAmount.add(lineItem.getCostSharingAmount());
+                        List<? extends BudgetLineItemCalculatedAmountContract> calculatedAmounts = lineItem.getBudgetLineItemCalculatedAmounts();
+                        for (BudgetLineItemCalculatedAmountContract budgetLineItemCalculatedAmount : calculatedAmounts) {
+                             costSharingAmount =  costSharingAmount.add(budgetLineItemCalculatedAmount.getCalculatedCostSharing());
+                        }
+
+                    }
+                }
+            }
+            if(!hasBudgetLineItem && budget.getSubmitCostSharingFlag()){
+                costSharingAmount = budget.getCostSharingAmount();
+            }
+            fedNonFedCost = fedNonFedCost.add(costSharingAmount);
+            funding = EstimatedProjectFunding.Factory.newInstance();
+            funding.setTotalEstimatedAmount(totalCost
+                    .bigDecimalValue());
+            funding.setTotalNonfedrequested(costSharingAmount.bigDecimalValue());
+            funding.setTotalfedNonfedrequested(fedNonFedCost.bigDecimalValue());
+            funding.setEstimatedProgramIncome(getTotalProjectIncome(budget));
+		}
+		return funding;
+	}
+
+	/*
+	 * This method computes total project income for the given budget
+	 */
+	private BigDecimal getTotalProjectIncome(BudgetContract budget) {
+		BigDecimal totalProjectIncome = BigDecimal.ZERO;
+		for (BudgetProjectIncomeContract budgetProjectIncome : budget
+				.getBudgetProjectIncomes()) {
+			totalProjectIncome = totalProjectIncome.add(budgetProjectIncome
+					.getProjectIncome().bigDecimalValue());
+		}
+		return totalProjectIncome;
+	}
+
+	/**
+	 *
+	 * This method gives the information for an application which consists of
+	 * personal details
+	 *
+	 * @return appInfo(ApplicantInfo) applicant details.
+	 */
+	private ApplicantInfo getApplicationInfo() {
+		ApplicantInfo appInfo = ApplicantInfo.Factory.newInstance();
+		appInfo.setContactPersonInfo(getContactPersonInfo());
+		appInfo.setOrganizationInfo(getOrganizationDataType());
+		return appInfo;
+	}
+
+	private ContactPersonInfo getContactPersonInfo() {
+		String contactType = getContactType();
+		ContactPersonInfo contactInfo = ContactPersonInfo.Factory.newInstance();
+		if (contactType.equals(CONTACT_TYPE_I)) {
+			// use organization rolodex contact
+			if (pdDoc.getDevelopmentProposal().getApplicantOrganization() != null) {
+				contactInfo = getContactInfo(pdDoc.getDevelopmentProposal()
+						.getApplicantOrganization().getRolodex());
+			}
+		} else {
+			// contact will come from unit or unit_administrators
+			DepartmentalPersonDto depPerson = getContactPerson(pdDoc);
+			if (depPerson != null) {
+				contactInfo.setName(globLibV20Generator
+						.getHumanNameDataType(depPerson));
+				contactInfo.setPhone(depPerson.getOfficePhone());
+				if (StringUtils.isNotEmpty(depPerson.getFaxNumber())) {
+					contactInfo.setFax(depPerson.getFaxNumber());
+				}
+				if (depPerson.getEmailAddress() != null) {
+					contactInfo.setEmail(depPerson.getEmailAddress());
+				}
+				contactInfo.setTitle(depPerson.getPrimaryTitle());
+				contactInfo.setAddress(globLibV20Generator
+                .getAddressDataType(depPerson));
+			}
+		}
+		return contactInfo;
+	}
+
+	private OrganizationDataType getOrganizationDataType() {
+		OrganizationDataType orgType = OrganizationDataType.Factory
+				.newInstance();
+        RolodexContract rolodex = pdDoc.getDevelopmentProposal()
+				.getApplicantOrganization().getRolodex();
+		orgType.setAddress(globLibV20Generator.getAddressDataType(rolodex));
+
+		OrganizationContract organization = pdDoc.getDevelopmentProposal()
+				.getApplicantOrganization().getOrganization();
+		if (organization != null) {
+			orgType.setOrganizationName(organization.getOrganizationName());
+			orgType.setDUNSID(organization.getDunsNumber());
+		}
+		UnitContract leadUnit = pdDoc.getDevelopmentProposal().getOwnedByUnit();
+		if (leadUnit != null) {
+			String departmentName = leadUnit.getUnitName();
+			if (departmentName != null
+					&& departmentName.length() > DEPARTMENT_NAME_MAX_LENGTH) {
+				departmentName = departmentName.substring(0,
+						DEPARTMENT_NAME_MAX_LENGTH - 1);
+			}
+			orgType.setDepartmentName(departmentName);
+
+			// divisionName
+			String divisionName =getPIDivision(leadUnit.getUnitNumber());
+			if (divisionName != null) {
+				orgType.setDivisionName(StringUtils.substring(divisionName, 0, DIVISION_NAME_MAX_LENGTH));
+			}
+		}
+		return orgType;
+	}
+
+	/**
+	 *
+	 * This method is used to get Contact person information
+	 *
+	 * @param rolodex Rolodex
+	 * @return ContactPersonInfo corresponding to the Rolodex object.
+	 */
+	private ContactPersonInfo getContactInfo(RolodexContract rolodex) {
+		ContactPersonInfo contactInfo = ContactPersonInfo.Factory.newInstance();
+		contactInfo.setName(globLibV20Generator.getHumanNameDataType(rolodex));
+		contactInfo.setPhone("");
+		if (rolodex != null) {
+			contactInfo.setPhone(rolodex.getPhoneNumber());
+			if (StringUtils.isNotEmpty(rolodex.getFaxNumber())) {
+				contactInfo.setFax(rolodex.getFaxNumber());
+			}
+			if (rolodex.getEmailAddress() != null) {
+				contactInfo.setEmail(rolodex.getEmailAddress());
+			}
+		}
+		return contactInfo;
+	}
+
+	/**
+	 *
+	 * This method gives the review information of a state
+	 *
+	 * @return stateReview(StateReview) corresponding to the state review code.
+	 */
+	private StateReview getStateReview() {
+	    StateReview stateReview = StateReview.Factory.newInstance();
+        Map<String, String> eoStateReview = getEOStateReview(pdDoc);
+        StateReviewCodeTypeDataType.Enum stateReviewCodeType = null;
+        String strReview = eoStateReview.get(YNQ_ANSWER);
+        String stateReviewData;
+        String stateReviewDate;
+        Calendar reviewDate;
+
+        if (STATE_REVIEW_YES.equals(strReview)) {
+            stateReviewCodeType = StateReviewCodeTypeDataType.Y_YES;
+            stateReviewDate = eoStateReview.get(YNQ_REVIEW_DATE);
+            reviewDate = s2SDateTimeService.convertDateStringToCalendar(stateReviewDate);
+            stateReview.setStateReviewDate(reviewDate);
+        } else if (STATE_REVIEW_NO.equals(strReview)) {
+            stateReviewData = eoStateReview.get(YNQ_STATE_REVIEW_DATA);
+            if (stateReviewData != null && YNQ_STATE_NOT_COVERED.equals(stateReviewData)) {
+                stateReviewCodeType = StateReviewCodeTypeDataType.PROGRAM_IS_NOT_COVERED_BY_E_O_12372;
+            } else if (stateReviewData != null && YNQ_STATE_NOT_SELECTED.equals(stateReviewData)) {
+                stateReviewCodeType = StateReviewCodeTypeDataType.PROGRAM_HAS_NOT_BEEN_SELECTED_BY_STATE_FOR_REVIEW;
+            }
+        }
+        stateReview.setStateReviewCodeType(stateReviewCodeType);
+        return stateReview;
+    }
+
+	/**
+	 *
+	 * This method is used to get ApplicationType for the form RRSF424
+	 *
+	 * @return ApplicationType corresponding to the proposal type code.
+	 */
+	private ApplicationType getApplicationType() {
+		ApplicationType applicationType = ApplicationType.Factory.newInstance();
+		Map<String, String> submissionInfo = getSubmissionType(pdDoc);
+		String proposalTypeCode=pdDoc.getDevelopmentProposal().getProposalType().getCode();
+		if (s2SConfigurationService.getValuesFromCommaSeparatedParam(ConfigurationConstants.PROPOSAL_TYPE_CODE_REVISION).contains(proposalTypeCode)) {
+			applicationType.setApplicationTypeCode(ApplicationTypeCodeDataType.Enum.forInt(ApplicationTypeCodeDataType.INT_REVISION));
+			String revisionCode;
+			if (submissionInfo.get(KEY_REVISION_CODE) != null) {
+				revisionCode = submissionInfo.get(KEY_REVISION_CODE);
+				RevisionTypeCodeDataType.Enum revisionCodeApplication = RevisionTypeCodeDataType.Enum.forString(revisionCode);
+				applicationType.setRevisionCode(revisionCodeApplication);
+			}
+			String revisionCodeOtherDesc;
+			if (submissionInfo.get(KEY_REVISION_OTHER_DESCRIPTION) != null) {
+				revisionCodeOtherDesc = submissionInfo.get(KEY_REVISION_OTHER_DESCRIPTION);
+				applicationType.setRevisionCodeOtherExplanation(revisionCodeOtherDesc);
+			}
+		}
+		if (pdDoc.getDevelopmentProposal().getProposalType() != null) {
+			setProposalApplicationType(proposalTypeCode,applicationType);
+		}
+		setOtherAgencySubmissionDetails(applicationType);
+		return applicationType;
+	}
+
+	private void setProposalApplicationType(String proposalTypeCode,ApplicationType applicationType) {
+		if(s2SConfigurationService.getValuesFromCommaSeparatedParam(ConfigurationConstants.PROPOSAL_TYPE_CODE_NEW).contains(proposalTypeCode)) {
+			applicationType.setApplicationTypeCode(ApplicationTypeCodeDataType.Enum.forInt(ApplicationTypeCodeDataType.INT_NEW));
+		}else if(s2SConfigurationService.getValuesFromCommaSeparatedParam(ConfigurationConstants.PROPOSAL_TYPE_CODE_REVISION).contains(proposalTypeCode)) {
+			applicationType.setApplicationTypeCode(ApplicationTypeCodeDataType.Enum.forInt(ApplicationTypeCodeDataType.INT_REVISION));
+		}else if(s2SConfigurationService.getValuesFromCommaSeparatedParam(ConfigurationConstants.PROPOSAL_TYPE_CODE_RENEWAL).contains(proposalTypeCode))  {
+			applicationType.setApplicationTypeCode(ApplicationTypeCodeDataType.Enum.forInt(ApplicationTypeCodeDataType.INT_RENEWAL));
+		}else if(s2SConfigurationService.getValuesFromCommaSeparatedParam(ConfigurationConstants.PROPOSAL_TYPE_CODE_RESUBMISSION).contains(proposalTypeCode)) {
+			applicationType.setApplicationTypeCode(ApplicationTypeCodeDataType.Enum.forInt(ApplicationTypeCodeDataType.INT_RESUBMISSION));
+		}else if(s2SConfigurationService.getValuesFromCommaSeparatedParam(ConfigurationConstants.PROPOSAL_TYPE_CODE_CONTINUATION).contains(proposalTypeCode)) {
+			applicationType.setApplicationTypeCode(ApplicationTypeCodeDataType.Enum.forInt(ApplicationTypeCodeDataType.INT_CONTINUATION));
+		}
+	}
+
+	private void setOtherAgencySubmissionDetails(ApplicationType applicationType) {
+	    YesNoDataType.Enum answer = null;
+	    String answerdetails = getAnswer(ANSWER_128, answerHeaders);
+	    if(answerdetails != null && !answerdetails.equals(NOT_ANSWERED)){
+	        answer =  answerdetails.equals(YnqConstant.YES.code()) ? YesNoDataType.Y_YES : YesNoDataType.N_NO;
+	        applicationType.setIsOtherAgencySubmission(answer);
+	    } else {
+	        applicationType.setIsOtherAgencySubmission(null);
+	    }
+
+	    if (answer !=null && answer.equals(YesNoDataType.Y_YES)) {
+            applicationType.setOtherAgencySubmissionExplanation(getOtherAgencySubmissionExplanation());
+	    }
+	}
+
+	/**
+	 *
+	 * This method is used to get Proposed Project Period for RRSF424
+	 *
+	 * @return ProposedProjectPeriod project start date and end date.
+	 */
+	private RRSF42420.ProposedProjectPeriod getProjectPeriod() {
+	    RRSF42420.ProposedProjectPeriod proposedProjectPeriod = RRSF42420.ProposedProjectPeriod.Factory
+				.newInstance();
+		proposedProjectPeriod.setProposedStartDate(s2SDateTimeService
+				.convertDateToCalendar(pdDoc.getDevelopmentProposal()
+						.getRequestedStartDateInitial()));
+		proposedProjectPeriod.setProposedEndDate(s2SDateTimeService
+				.convertDateToCalendar(pdDoc.getDevelopmentProposal()
+						.getRequestedEndDateInitial()));
+		return proposedProjectPeriod;
+	}
+
+	/**
+	 *
+	 * This method is used to get Congressional District for RRSF424
+	 *
+	 * @return CongressionalDistrict congressional district for the Applicant
+	 *         and Project.
+	 */
+	private RRSF42420.CongressionalDistrict getCongDistrict() {
+		ProposalSiteContract applicantOrganization = pdDoc.getDevelopmentProposal()
+				.getApplicantOrganization();
+		RRSF42420.CongressionalDistrict congressionalDistrict = RRSF42420.CongressionalDistrict.Factory
+				.newInstance();
+		if (applicantOrganization != null) {
+			congressionalDistrict
+					.setApplicantCongressionalDistrict(applicantOrganization
+							.getFirstCongressionalDistrictName());
+		} else {
+			congressionalDistrict.setApplicantCongressionalDistrict("");
+		}
+		return congressionalDistrict;
+	}
+
+	/**
+	 *
+	 * This method is used to get details of Principal Investigator for
+	 * Organization Contact
+	 *
+	 * @return OrganizationContactPersonDataType Principal investigator details.
+	 */
+	private OrganizationContactPersonDataType getPDPI() {
+		OrganizationContactPersonDataType PDPI = OrganizationContactPersonDataType.Factory
+				.newInstance();
+		ProposalPersonContract PI;
+		for (ProposalPersonContract proposalPerson : pdDoc.getDevelopmentProposal()
+				.getProposalPersons()) {
+			if (PRINCIPAL_INVESTIGATOR.equals(proposalPerson
+					.getProposalPersonRoleId())) {
+				PI = proposalPerson;
+				ProposalSiteContract applicantOrganization = pdDoc
+						.getDevelopmentProposal().getApplicantOrganization();
+				PDPI.setName(globLibV20Generator.getHumanNameDataType(PI));
+				PDPI.setPhone(PI.getOfficePhone());
+				PDPI.setEmail(PI.getEmailAddress());
+				if (StringUtils.isNotEmpty(PI.getFaxNumber())) {
+					PDPI.setFax(PI.getFaxNumber());
+				}
+				PDPI.setAddress(globLibV20Generator.getAddressDataType(PI));
+				setDirectoryTitle(PDPI, PI);
+				setDepartmentName(PDPI,PI);
+				setDivisionName(PDPI,PI);
+				if (applicantOrganization != null) {
+					PDPI.setOrganizationName(applicantOrganization
+							.getLocationName());
+				}
+			}
+		}
+		return PDPI;
+	}
+
+	private void setDivisionName(OrganizationContactPersonDataType PDPI,ProposalPersonContract PI) {
+		String divisionName = PI.getDivision();
+		if (divisionName != null) {
+			PDPI.setDivisionName(StringUtils.substring(divisionName, 0, DIVISION_NAME_MAX_LENGTH));
+		} else {
+			String personId = PI.getPersonId();
+			KcPersonContract kcPersons = kcPersonRepositoryService.findKcPersonByPersonId(personId);
+
+			if (kcPersons.getOrganizationIdentifier() != null) {
+				divisionName = getPIDivision(kcPersons.getOrganizationIdentifier());
+			}
+			if (divisionName != null) {
+				PDPI.setDivisionName(StringUtils.substring(divisionName, 0, DIVISION_NAME_MAX_LENGTH));
+			}
+		}
+	}
+
+	private String getPIDivision(String departmentId) {
+		String divisionName = null;
+		String unitName = getUnitName(departmentId);
+		String heirarchyLevelDivisionName = null;
+		int hierarchyLevel = Integer.parseInt(s2SConfigurationService
+				.getValueAsString(ConfigurationConstants.HIERARCHY_LEVEL));
+		int levelCount = 1;
+		List<UnitContract> heirarchyUnits = unitRepositoryService
+				.getUnitHierarchyForUnit(departmentId);
+		for (UnitContract heirarchyUnit : heirarchyUnits) {
+			if (levelCount < hierarchyLevel
+					&& heirarchyUnit.getUnitName().equalsIgnoreCase(unitName)) {
+				divisionName = heirarchyUnit.getUnitName();
+			} else if (levelCount == hierarchyLevel) {
+				heirarchyLevelDivisionName = heirarchyUnit.getUnitName();
+				if (heirarchyUnit.getUnitName().equalsIgnoreCase(unitName)) {
+					divisionName = heirarchyLevelDivisionName;
+				}
+			} else if (levelCount > hierarchyLevel
+					&& heirarchyUnit.getUnitName().equalsIgnoreCase(unitName)) {
+				divisionName = heirarchyLevelDivisionName;
+			}
+			levelCount++;
+		}
+		return divisionName;
+	}
+
+	private String getUnitName(String departmentCode) {
+		UnitContract unit = unitRepositoryService.findUnitByUnitNumber(departmentCode);
+		return unit == null ? null : unit.getUnitName();
+	}
+
+	private void setDepartmentName(OrganizationContactPersonDataType PDPI,ProposalPersonContract PI) {
+	    if(PI.getHomeUnit() != null) {
+			PDPI.setDepartmentName(getDepartmentName(PI.getPerson()));
+	    }
+	    else
+	    {
+	        DevelopmentProposalContract developmentProposal = pdDoc.getDevelopmentProposal();
+	        PDPI.setDepartmentName(StringUtils.substring(developmentProposal.getOwnedByUnit().getUnitName(), 0, DEPARTMENT_NAME_MAX_LENGTH));
+	    }
+	}
+
+	private void setDirectoryTitle(OrganizationContactPersonDataType PDPI,
+			ProposalPersonContract PI) {
+		if (PI.getDirectoryTitle() != null) {
+			if (PI.getDirectoryTitle().length() > DIRECTORY_TITLE_MAX_LENGTH) {
+				PDPI.setTitle(PI.getDirectoryTitle().substring(0,
+						DIRECTORY_TITLE_MAX_LENGTH));
+			} else {
+				PDPI.setTitle(PI.getDirectoryTitle());
+			}
+		}
+	}
+
+	/**
+	 *
+	 * This method is used to get AOR Information for RRSf424
+	 *
+	 * @return aorInfoType(AORInfoType) Authorized representative information.
+	 */
+	private AORInfoType getAORInfoType() {
+		ProposalSiteContract applicantOrganization = pdDoc.getDevelopmentProposal()
+				.getApplicantOrganization();
+		AORInfoType aorInfoType = AORInfoType.Factory.newInstance();
+		if (departmentalPerson != null) {
+			aorInfoType.setName(globLibV20Generator
+					.getHumanNameDataType(departmentalPerson));
+
+			setTitle(aorInfoType);
+			setAddress(aorInfoType);
+			setDivisionName(aorInfoType);
+		}
+		if (applicantOrganization != null) {
+			aorInfoType.setOrganizationName(applicantOrganization
+					.getLocationName());
+		}
+
+		return aorInfoType;
+	}
+
+	private void setTitle(AORInfoType aorInfoType) {
+		if (departmentalPerson.getPrimaryTitle() != null) {
+			if (departmentalPerson.getPrimaryTitle().length() > PRIMARY_TITLE_MAX_LENGTH) {
+				aorInfoType.setTitle(departmentalPerson.getPrimaryTitle()
+						.substring(0, PRIMARY_TITLE_MAX_LENGTH));
+			} else {
+				aorInfoType.setTitle(departmentalPerson.getPrimaryTitle());
+			}
+		} else {
+			aorInfoType.setTitle("");
+		}
+	}
+
+	private void setAddress(AORInfoType aorInfoType) {
+		AddressDataType address = AddressDataType.Factory.newInstance();
+
+		if (departmentalPerson.getAddress1() != null) {
+			if (departmentalPerson.getAddress1().length() > 55) {
+				address.setStreet1(departmentalPerson.getAddress1().substring(
+						0, 55));
+			} else {
+				address.setStreet1(departmentalPerson.getAddress1());
+			}
+		}
+		if (departmentalPerson.getAddress2() != null && departmentalPerson.getAddress2().length() != 0) {
+			if (departmentalPerson.getAddress2().length() > 55) {
+				address.setStreet2(departmentalPerson.getAddress2().substring(
+						0, 55));
+			} else {
+				address.setStreet2(departmentalPerson.getAddress2());
+			}
+		}
+
+		if (departmentalPerson.getCounty() != null) {
+			address.setCounty(departmentalPerson.getCounty());
+		}
+		address.setCity(departmentalPerson.getCity());
+		address.setZipPostalCode(departmentalPerson.getPostalCode());
+
+		CountryCodeDataType.Enum countryCodeDataType = globLibV20Generator
+				.getCountryCodeDataType(departmentalPerson.getCountryCode());
+		address.setCountry(countryCodeDataType);
+
+		String state = departmentalPerson.getState();
+		if (state != null && !state.equals("")) {
+			if (countryCodeDataType != null) {
+				if (countryCodeDataType.equals(CountryCodeDataType.USA_UNITED_STATES)) {
+					address.setState(globLibV20Generator
+									.getStateCodeDataType(departmentalPerson.getCountryCode(), departmentalPerson.getState()));
+				} else {
+					address.setProvince(state);
+				}
+			}
+		}
+
+		aorInfoType.setAddress(address);
+		aorInfoType.setPhone(departmentalPerson.getOfficePhone());
+        if (StringUtils.isNotEmpty(departmentalPerson.getFaxNumber())){
+		    aorInfoType.setFax(departmentalPerson.getFaxNumber());
+        }
+		aorInfoType.setEmail(departmentalPerson.getEmailAddress());
+	}
+
+	private void setDivisionName(AORInfoType aorInfoType) {
+		if (departmentalPerson.getHomeUnit() != null) {
+			aorInfoType.setDivisionName(StringUtils.substring(getUnitName(departmentalPerson.getHomeUnit()), 0, DIVISION_NAME_MAX_LENGTH));
+		}
+	}
+
+	/**
+	 *
+	 * This method is used to get Applicant type for RRSF424
+	 *
+	 * @return applicantType(ApplicantType) type of applicant.
+	 */
+	private ApplicantType getApplicantType() {
+		ApplicantType applicantType = ApplicantType.Factory.newInstance();
+		SmallBusinessOrganizationType smallOrganizationType = SmallBusinessOrganizationType.Factory
+				.newInstance();
+		IsSociallyEconomicallyDisadvantaged isSociallyEconomicallyDisadvantaged = IsSociallyEconomicallyDisadvantaged.Factory
+				.newInstance();
+		IsWomenOwned isWomenOwned = IsWomenOwned.Factory.newInstance();
+		boolean smallBusflag = false;
+		int orgTypeCode = 0;
+		if (pdDoc.getDevelopmentProposal().getApplicantOrganization() != null
+				&& pdDoc.getDevelopmentProposal().getApplicantOrganization()
+						.getOrganization().getOrganizationTypes() != null
+				&& pdDoc.getDevelopmentProposal().getApplicantOrganization()
+						.getOrganization().getOrganizationTypes().size() > 0) {
+			orgTypeCode = pdDoc.getDevelopmentProposal()
+					.getApplicantOrganization().getOrganization()
+					.getOrganizationTypes().get(0).getOrganizationTypeList().getCode();
+		}
+		ApplicantTypeCodeDataType.Enum applicantTypeCode;
+
+		switch (orgTypeCode) {
+		case 1:
+			applicantTypeCode = ApplicantTypeCodeDataType.C_CITY_OR_TOWNSHIP_GOVERNMENT;
+			break;
+		case 2:
+			applicantTypeCode = ApplicantTypeCodeDataType.A_STATE_GOVERNMENT;
+			break;
+		case 3:
+			applicantTypeCode = ApplicantTypeCodeDataType.X_OTHER_SPECIFY;
+			break;
+		case 4:
+			applicantTypeCode = ApplicantTypeCodeDataType.M_NONPROFIT_WITH_501_C_3_IRS_STATUS_OTHER_THAN_INSTITUTION_OF_HIGHER_EDUCATION;
+			break;
+		case 5:
+			applicantTypeCode = ApplicantTypeCodeDataType.N_NONPROFIT_WITHOUT_501_C_3_IRS_STATUS_OTHER_THAN_INSTITUTION_OF_HIGHER_EDUCATION;
+			break;
+		case 6:
+			applicantTypeCode = ApplicantTypeCodeDataType.Q_FOR_PROFIT_ORGANIZATION_OTHER_THAN_SMALL_BUSINESS;
+			break;
+		case 7:
+			applicantTypeCode = ApplicantTypeCodeDataType.X_OTHER_SPECIFY;
+			break;
+		case 8:
+			applicantTypeCode = ApplicantTypeCodeDataType.I_INDIAN_NATIVE_AMERICAN_TRIBAL_GOVERNMENT_FEDERALLY_RECOGNIZED;
+			break;
+		case 9:
+			applicantTypeCode = ApplicantTypeCodeDataType.P_INDIVIDUAL;
+			break;
+		case 10:
+			applicantTypeCode = ApplicantTypeCodeDataType.O_PRIVATE_INSTITUTION_OF_HIGHER_EDUCATION;
+			break;
+		case 11:
+			applicantTypeCode = ApplicantTypeCodeDataType.R_SMALL_BUSINESS;
+			break;
+		case 14:
+			applicantTypeCode = ApplicantTypeCodeDataType.X_OTHER_SPECIFY;
+			isSociallyEconomicallyDisadvantaged.setStringValue(VALUE_YES);
+			smallOrganizationType
+					.setIsSociallyEconomicallyDisadvantaged(isSociallyEconomicallyDisadvantaged);
+			smallBusflag = true;
+			break;
+		case 15:
+			applicantTypeCode = ApplicantTypeCodeDataType.X_OTHER_SPECIFY;
+			isWomenOwned.setStringValue(VALUE_YES);
+			smallOrganizationType.setIsWomenOwned(isWomenOwned);
+			smallBusflag = true;
+			break;
+		case 21:
+			applicantTypeCode = ApplicantTypeCodeDataType.H_PUBLIC_STATE_CONTROLLED_INSTITUTION_OF_HIGHER_EDUCATION;
+			break;
+		case 22:
+			applicantTypeCode = ApplicantTypeCodeDataType.B_COUNTY_GOVERNMENT;
+			break;
+		case 23:
+			applicantTypeCode = ApplicantTypeCodeDataType.D_SPECIAL_DISTRICT_GOVERNMENT;
+			break;
+		case 24:
+			applicantTypeCode = ApplicantTypeCodeDataType.G_INDEPENDENT_SCHOOL_DISTRICT;
+			break;
+		case 25:
+			applicantTypeCode = ApplicantTypeCodeDataType.L_PUBLIC_INDIAN_HOUSING_AUTHORITY;
+			break;
+		case 26:
+			applicantTypeCode = ApplicantTypeCodeDataType.J_INDIAN_NATIVE_AMERICAN_TRIBAL_GOVERNMENT_OTHER_THAN_FEDERALLY_RECOGNIZED;
+			break;
+		default:
+			applicantTypeCode = ApplicantTypeCodeDataType.X_OTHER_SPECIFY;
+			break;
+		}
+		if (smallBusflag) {
+			applicantType
+					.setSmallBusinessOrganizationType(smallOrganizationType);
+		}
+
+		if (orgTypeCode == 3) {
+			applicantType
+					.setApplicantTypeCodeOtherExplanation("Federal Government");
+		}
+		applicantType.setApplicantTypeCode(applicantTypeCode);
+		return applicantType;
+	}
+
+	private String getSubmissionTypeCode() {
+		String submissionTypeCode = null;
+		S2sOpportunityContract s2sOpportunity = pdDoc.getDevelopmentProposal()
+				.getS2sOpportunity();
+		if (s2sOpportunity != null
+				&& s2sOpportunity.getS2sSubmissionType() != null) {
+			submissionTypeCode = s2sOpportunity.getS2sSubmissionType().getCode();
+		}
+
+		if (pdDoc.getDevelopmentProposal().getProposalType() != null) {
+			String proposalTypeCode=pdDoc.getDevelopmentProposal().getProposalType().getCode();
+			if(s2SConfigurationService.getValuesFromCommaSeparatedParam(ConfigurationConstants.PROPOSAL_TYPE_CODE_NEW_CHANGE_CORRECTED).contains(proposalTypeCode) ||
+					s2SConfigurationService.getValuesFromCommaSeparatedParam(ConfigurationConstants.PROPOSAL_TYPE_CODE_SUPPLEMENT_CHANGE_CORRECTED).contains(proposalTypeCode) ||
+					s2SConfigurationService.getValuesFromCommaSeparatedParam(ConfigurationConstants.PROPOSAL_TYPE_CODE_RENEWAL_CHANGE_CORRECTED).contains(proposalTypeCode) ||
+					s2SConfigurationService.getValuesFromCommaSeparatedParam(ConfigurationConstants.PROPOSAL_TYPE_CODE_RESUBMISSION_CHANGE_CORRECTED).contains(proposalTypeCode)) {
+				submissionTypeCode=Integer.toString(SubmissionTypeDataType.INT_CHANGE_CORRECTED_APPLICATION);
+			}else if(s2SConfigurationService.getValuesFromCommaSeparatedParam(ConfigurationConstants.PROPOSAL_TYPE_CODE_PRE_PROPOSAL).contains(proposalTypeCode)) {
+				submissionTypeCode=Integer.toString(SubmissionTypeDataType.INT_PREAPPLICATION);
+			}
+		}
+		return submissionTypeCode;
+	}
+
+	private String getRolodexState() {
+		String state = "";
+        RolodexContract rolodex = pdDoc.getDevelopmentProposal()
+				.getApplicantOrganization().getRolodex();
+		if (rolodex != null) {
+			state = rolodex.getState();
+		}
+		return state;
+	}
+
+	private String getEmployerId() {
+		String employerId = "";
+		ProposalSiteContract applicantOrganization = pdDoc.getDevelopmentProposal()
+				.getApplicantOrganization();
+		boolean isNih  = isSponsorInHierarchy(pdDoc.getDevelopmentProposal(), SPONSOR_GROUPS,SPONSOR_NIH);
+        if (applicantOrganization != null) {
+            if(applicantOrganization.getOrganization().getPhsAccount()!= null && isNih){
+                employerId = applicantOrganization.getOrganization()
+                        .getPhsAccount();
+            }else{
+
+                employerId = applicantOrganization.getOrganization()
+                        .getFederalEmployerId();
+            }
+        }
+
+		return employerId;
+	}
+
+	private String getFederalAgencyName() {
+		String agencyName = "";
+		SponsorContract sponsor = pdDoc.getDevelopmentProposal().getSponsor();
+		if (sponsor != null) {
+			agencyName = sponsor.getSponsorName();
+		}
+		return agencyName;
+	}
+
+	private void setPreApplicationAttachment(RRSF42420 rrsf42420) {
+		for (NarrativeContract narrative : pdDoc.getDevelopmentProposal()
+				.getNarratives()) {
+			if (narrative.getNarrativeType().getCode() != null
+					&& Integer.parseInt(narrative.getNarrativeType().getCode()) == PRE_APPLICATION) {
+				AttachedFileDataType preAttachment = getAttachedFileType(narrative);
+				if(preAttachment != null){
+				    rrsf42420.setPreApplicationAttachment(preAttachment);
+					break;
+				}
+			}
+		}
+	}
+	private void setSFLLLAttachment(RRSF42420 rrsf42420) {
+		for (NarrativeContract narrative : pdDoc.getDevelopmentProposal()
+				.getNarratives()) {
+			if (narrative.getNarrativeType().getCode() != null
+					&& Integer.parseInt(narrative.getNarrativeType().getCode()) == SFLLL_OTHEREXPLANATORY) {
+				AttachedFileDataType preAttachment = getAttachedFileType(narrative);
+				if(preAttachment != null){
+				    rrsf42420.setSFLLLAttachment(preAttachment);
+					break;
+				}
+			}
+		}
+	}
+
+	private void setCoverLetterAttachment (RRSF42420 rrsf42420) {
+        for (NarrativeContract narrative : pdDoc.getDevelopmentProposal()
+                .getNarratives()) {
+            if (narrative.getNarrativeType().getCode() != null
+                    && Integer.parseInt(narrative.getNarrativeType().getCode()) == RRSF424_Cover_Letter) {
+                AttachedFileDataType preAttachment = getAttachedFileType(narrative);
+                if(preAttachment != null){
+                    rrsf42420.setCoverLetterAttachment(preAttachment);
+                    break;
+                }
+            }
+        }
+    }
+
+	private String getAORSignature() {
+		String AORSignature = "";
+		if (departmentalPerson != null) {
+			AORSignature = departmentalPerson.getFullName();
+		}
+		return AORSignature;
+	}
+
+    private void setFederalId(RRSF42420 rrsf42420) {
+        final String federalId = getFederalId();
+		if (StringUtils.isNotBlank(federalId)) {
+			rrsf42420.setFederalID(federalId);
+		}
+    }
+
+	private String getActivityTitle() {
+		return StringUtils.substring(pdDoc.getDevelopmentProposal().getS2sOpportunity().getCfdaDescription(), 0, CFDA_TITLE_MAX_LENGTH);
+	}
+
+	private String getProjectTitle() {
+			return StringUtils.substring(pdDoc.getDevelopmentProposal().getTitle(), 0, PROJECT_TITLE_MAX_LENGTH);
+	}
+
+	private String getAgencyRoutingNumber(){
+		return pdDoc.getDevelopmentProposal().getAgencyRoutingIdentifier();
+
+	}
+
+    private String getGGTrackingID() {
+    	return pdDoc.getDevelopmentProposal().getPrevGrantsGovTrackingID();
+    }
+	/**
+	 * This method creates {@link XmlObject} of type {@link RRSF42420Document}
+	 * by populating data from the given {@link ProposalDevelopmentDocumentContract}
+	 *
+	 * @param proposalDevelopmentDocument
+	 *            for which the {@link XmlObject} needs to be created
+	 * @return {@link XmlObject} which is generated using the given
+	 *         {@link ProposalDevelopmentDocumentContract}
+	 */
+	@Override
+	public RRSF42420Document getFormObject(
+			ProposalDevelopmentDocumentContract proposalDevelopmentDocument) {
+        this.pdDoc = proposalDevelopmentDocument;
+        departmentalPerson = departmentalPersonService
+                .getDepartmentalPerson(proposalDevelopmentDocument);
+        return getRRSF424();
+    }
+
+    @Override
+    protected List<? extends AnswerHeaderContract> getAnswerHeaders() {
+        return answerHeaders;
+    }
+
+    @Override
+    public String getNamespace() {
+        return namespace;
+    }
+
+    public void setNamespace(String namespace) {
+        this.namespace = namespace;
+    }
+
+    @Override
+    public String getFormName() {
+        return formName;
+    }
+
+    public void setFormName(String formName) {
+        this.formName = formName;
+    }
+
+    @Override
+    public Resource getStylesheet() {
+        return stylesheet;
+    }
+
+    public void setStylesheet(Resource stylesheet) {
+        this.stylesheet = stylesheet;
+    }
+
+    @Override
+    public String getPackageName() {
+        return packageName;
+    }
+
+    public void setPackageName(String packageName) {
+        this.packageName = packageName;
+    }
+
+    @Override
+    public int getSortIndex() {
+        return sortIndex;
+    }
+
+    public void setSortIndex(int sortIndex) {
+        this.sortIndex = sortIndex;
+    }
+
+	public KcPersonRepositoryService getKcPersonRepositoryService() {
+		return kcPersonRepositoryService;
+	}
+
+	public void setKcPersonRepositoryService(
+			KcPersonRepositoryService kcPersonRepositoryService) {
+		this.kcPersonRepositoryService = kcPersonRepositoryService;
+	}
+
+	public UnitRepositoryService getUnitRepositoryService() {
+		return unitRepositoryService;
+	}
+
+	public void setUnitRepositoryService(UnitRepositoryService unitRepositoryService) {
+		this.unitRepositoryService = unitRepositoryService;
+	}
+}

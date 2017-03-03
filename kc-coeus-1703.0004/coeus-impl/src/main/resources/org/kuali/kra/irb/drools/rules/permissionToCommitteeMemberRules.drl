@@ -1,0 +1,39 @@
+/*
+ * Kuali Coeus, a comprehensive research administration system for higher education.
+ *
+ * Copyright 2005-2016 Kuali, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package org.kuali.kra.irb.drools.rules
+
+
+import org.kuali.kra.irb.actions.submit.ActionRightMapping;
+
+
+rule "Rule 1 -  303 And 207/301/300/302/305/306 And 205/206/109/201/200/210/208/209 And 202/203/304/204/211/212"
+salience 100
+when
+	actionRight : ActionRightMapping(actionTypeCode in ('303','207','301','300','302','305','306','205','206','109','201','200','210','208','209','202','203','304','204','211','212') , scheduleId != null)
+then	
+    actionRight.setAllowed(true);
+end
+
+rule "Rule 2 -  303 And 207/301/300/302/305/306 And 205/206/109/201/200/210/208/209 And 202/203/304/204/211/212"
+salience 100
+when
+	actionRight : ActionRightMapping(actionTypeCode in ('303','207','301','300','302','305','306','205','206','109','201','200','210','208','209','202','203','304','204','211','212') , committeeId != null)
+then	
+    actionRight.setAllowed(true);;
+end

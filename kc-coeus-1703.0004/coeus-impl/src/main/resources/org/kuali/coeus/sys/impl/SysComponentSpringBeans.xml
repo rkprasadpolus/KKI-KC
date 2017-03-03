@@ -1,0 +1,554 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   - Kuali Coeus, a comprehensive research administration system for higher education.
+   - 
+   - Copyright 2005-2016 Kuali, Inc.
+   - 
+   - This program is free software: you can redistribute it and/or modify
+   - it under the terms of the GNU Affero General Public License as
+   - published by the Free Software Foundation, either version 3 of the
+   - License, or (at your option) any later version.
+   - 
+   - This program is distributed in the hope that it will be useful,
+   - but WITHOUT ANY WARRANTY; without even the implied warranty of
+   - MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   - GNU Affero General Public License for more details.
+   - 
+   - You should have received a copy of the GNU Affero General Public License
+   - along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ -->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:p="http://www.springframework.org/schema/p"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xmlns:amq="http://activemq.apache.org/schema/core"
+       xmlns:mvc="http://www.springframework.org/schema/mvc"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/context
+                           http://www.springframework.org/schema/context/spring-context.xsd
+                           http://www.springframework.org/schema/tx
+                           http://www.springframework.org/schema/tx/spring-tx.xsd
+                           http://www.springframework.org/schema/util
+                           http://www.springframework.org/schema/util/spring-util.xsd
+                           http://activemq.apache.org/schema/core
+                           http://activemq.apache.org/schema/core/activemq-core.xsd
+                           http://www.springframework.org/schema/mvc
+                           http://www.springframework.org/schema/mvc/spring-mvc.xsd">
+
+    <tx:annotation-driven transaction-manager="transactionManager" />
+    <context:annotation-config />
+    <context:component-scan base-package="org.kuali.coeus.sys" />
+    <mvc:annotation-driven/>
+
+    <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+        <property name="properties" value="#{T(org.kuali.rice.core.api.config.property.ConfigContext).getCurrentContextConfig().getProperties()}" />
+    </bean>
+
+    <import resource="classpath:org/kuali/coeus/sys/impl/SysImportRiceSpringBeans.xml"/>
+    <import resource="classpath:org/kuali/coeus/sys/impl/SysImportModuleSpringBeans.xml"/>
+    <import resource="classpath:org/kuali/coeus/sys/framework/ImportEndpointSpringBeans.xml" />
+    <import resource="classpath:org/kuali/coeus/sys/framework/ImportSimpleCrudRestSpringBeans.xml" />
+
+    <!-- only brought in on the grm profile -->
+    <import resource="classpath:co/kuali/coeus/grm/impl/GrmSysComponentSpringBeans.xml"/>
+
+    <bean class="org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping"/>
+    <bean class="org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter">
+        <property name="messageConverters">
+            <list>
+                <bean class="org.springframework.http.converter.ByteArrayHttpMessageConverter"/>
+                <bean class="org.springframework.http.converter.ResourceHttpMessageConverter"/>
+                <bean class="org.springframework.http.converter.StringHttpMessageConverter"/>
+                <bean class="org.springframework.http.converter.json.MappingJacksonHttpMessageConverter"/>
+                <bean class="org.springframework.http.converter.xml.SourceHttpMessageConverter"/>
+                <bean class="org.springframework.http.converter.xml.XmlAwareFormHttpMessageConverter"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="sysModule" parent="sysModule-parentBean" />
+    <bean id="sysModule-parentBean" class="org.kuali.rice.krad.service.impl.ModuleServiceBase" abstract="true">
+        <property name="moduleConfiguration" ref="sysModuleConfiguration"/>
+        <property name="kualiModuleService" ref="kualiModuleService"/>
+    </bean>
+
+    <bean id="sysModuleConfiguration" parent="sysModuleConfiguration-parentBean" />
+    <bean id="sysModuleConfiguration-parentBean" class="org.kuali.rice.krad.bo.ModuleConfiguration" abstract="true">
+        <property name="namespaceCode" value="KC-SYS" />
+        <property name="packagePrefixes">
+            <list>
+                <value>org.kuali.coeus.sys</value>
+            </list>
+        </property>
+        <property name="providers">
+            <list>
+                <ref bean="jpaPersistenceProvider"/>
+                <ref bean="metadataProvider"/>
+            </list>
+        </property>
+        <property name="dataDictionaryPackages">
+            <list>
+               <value>classpath:org/kuali/coeus/sys/impl/view/KcTransactionalDocumentView.xml</value>
+            </list>
+        </property>
+    </bean>
+
+    <alias alias="kradApplicationDataSource" name="dataSource" />
+
+    <bean id="jpaPersistenceUnitName" class="java.lang.String">
+        <!-- due to lack of modularity kc has to load it's entirety in a single persistence unit -->
+        <constructor-arg value="KC" />
+    </bean>
+
+    <util:list id="jpaPackagesToScan">
+        <value>org.kuali.coeus</value>
+        <value>org.kuali.kra</value>
+    </util:list>
+
+    <util:list id="managedClassNames" />
+
+    <util:list id="additionalMetadataProviders" />
+
+    <util:list id="springMetadataFileLocations" />
+
+    <import resource="classpath:org/kuali/rice/krad/config/KRADSpringBeans-jpa-common.xml" />
+
+    <alias name="sharedEntityManager" alias="kcEntityManager" />
+
+    <bean id="kcPessimisticLockingJobDetail" class="org.springframework.scheduling.quartz.MethodInvokingJobDetailFactoryBean">
+        <property name="targetObject" ref="kcPessimisticLockService" />
+        <property name="targetMethod" value="clearExpiredLocks" />
+        <property name="concurrent" value="false" />
+    </bean>
+
+    <bean id="kcPessimisticLockingCronTrigger" class="org.kuali.coeus.sys.framework.scheduling.KcCronTriggerBean">
+        <property name="jobDetail" ref="kcPessimisticLockingJobDetail" />
+        <property name="parameterService" ref="parameterService" />
+        <property name="dateTimeService" ref="dateTimeService" />
+        <property name="cronExpressionParameterName" value="pessimisticLocking.cronExpression" />
+        <property name="parameterNamespace" value="KC-SYS" />
+        <property name="parameterComponent" value="All" />
+    </bean>
+    
+    <bean id="kcQuartzScheduler" class="org.springframework.scheduling.quartz.SchedulerFactoryBean">
+        <property name="exposeSchedulerInRepository" value="true" />
+        <property name="triggers">
+            <list merge="true">
+                <ref bean="kcPessimisticLockingCronTrigger" />
+            </list>
+        </property>
+    </bean>
+
+    <bean id="noEditLookupable" class="org.kuali.rice.kns.lookup.KualiLookupableImpl" scope="prototype">
+        <property name="lookupableHelperService" ref="noEditLookupableHelperService" />
+    </bean>
+
+    <bean id="schemaAnalyzer" class="net.sourceforge.schemaspy.SchemaAnalyzer"/>
+
+    <bean class="org.kuali.coeus.sys.framework.controller.interceptor.FilterRegistrator">
+        <property name="filter">
+            <bean class="co.kuali.coeus.sys.impl.persistence.SchemaSpyFilter">
+                <property name="schemaAnalyzer" ref="schemaAnalyzer"/>
+                <property name="globalVariableService" ref="globalVariableService" />
+                <property name="permissionService" ref="permissionService" />
+                <property name="schemaSpyEnabled" value="${kc.schemaspy.enabled}" />
+                <property name="datasourceUrl" value="${datasource.url}" />
+                <property name="dataSourceUsername" value="${datasource.username}"/>
+                <property name="dataSourcePassword" value="${datasource.password}"/>
+                <property name="dataSourcePlatform" value="${datasource.ojb.platform}" />
+                <property name="datasourceDriverName" value="${datasource.driver.name}" />
+                <property name="directoryName" value="schemaspy" />
+            </bean>
+        </property>
+        <property name="filterName" value="SchemaSpyFilter"/>
+        <property name="urlMapping">
+            <bean class="org.kuali.coeus.sys.framework.controller.interceptor.FilterRegistrator.Mapping">
+                <property name="matchAfter" value="true"/>
+                <property name="maps">
+                    <list>
+                        <value>/schemaspy/*</value>
+                    </list>
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+    <bean class="org.kuali.coeus.sys.framework.controller.interceptor.FilterRegistrator">
+        <property name="filter">
+            <bean class="co.kuali.coeus.sys.impl.monitor.MonitoringFilter">
+                <property name="globalVariableService" ref="globalVariableService" />
+                <property name="permissionService" ref="permissionService" />
+                <property name="monitoringEnabled" value="${kc.monitoring.enabled}" />
+            </bean>
+        </property>
+        <property name="filterName" value="monitoring"/>
+        <property name="urlMapping">
+            <bean class="org.kuali.coeus.sys.framework.controller.interceptor.FilterRegistrator.Mapping">
+                <property name="matchAfter" value="false"/>
+                <property name="maps">
+                    <list>
+                        <value>/monitoring/*</value>
+                    </list>
+                </property>
+            </bean>
+        </property>
+    </bean>
+
+    <bean class="org.kuali.coeus.sys.framework.controller.interceptor.FilterRegistrator">
+        <property name="filter">
+            <bean class="net.bull.javamelody.MonitoringFilter"/>
+        </property>
+        <property name="filterName" value="javamelody"/>
+        <property name="urlMapping">
+            <bean class="org.kuali.coeus.sys.framework.controller.interceptor.FilterRegistrator.Mapping">
+                <property name="matchAfter" value="true"/>
+                <property name="maps">
+                    <list>
+                        <value>/*</value>
+                    </list>
+                </property>
+            </bean>
+        </property>
+        <property name="initParameters">
+            <map>
+                <entry key="url-exclude-pattern" value="${kc.monitoring.exclude.pattern}"/>
+                <entry key="log" value="${kc.monitoring.verbose.logging}"/>
+                <entry key="disabled" value="#{not (T(org.kuali.rice.core.api.config.property.ConfigContext).getCurrentContextConfig().getBooleanProperty('kc.monitoring.enabled'))}" />
+                <entry key="monitoring-path" value="/monitoring/jm" />
+                <entry key="quartz-default-listener-disabled" value="true"/>
+                <entry key="storage-directory" value="${kc.monitoring.storage-directory}" />
+            </map>
+        </property>
+    </bean>
+
+    <bean class="org.kuali.coeus.sys.framework.listener.ListenerRegistrator">
+        <property name="listener">
+            <bean class="net.bull.javamelody.SessionListener"/>
+        </property>
+    </bean>
+
+    <!-- not using the activemq format here in order to use property replacement
+    which cannot be done without violating schema validation -->
+    <bean id="defaultRedeliveryPolicy" class="org.apache.activemq.RedeliveryPolicy"
+          p:maximumRedeliveries="${mq.redelivery.default.maximumRedeliveries}"
+          p:initialRedeliveryDelay="${mq.redelivery.default.initialRedeliveryDelay}"
+          p:redeliveryDelay="${mq.redelivery.default.redeliveryDelay}"
+          p:useExponentialBackOff="${mq.redelivery.default.useExponentialBackOff}"
+          p:backOffMultiplier="${mq.redelivery.default.backOffMultiplier}">
+    </bean>
+
+    <!-- Embedded ActiveMQ Broker -->
+    <amq:broker id="embeddedBroker" useJmx="false" persistent="true" schedulerSupport="true" dataDirectory="${mq.broker.dataDirectory}">
+        <amq:transportConnectors>
+            <amq:transportConnector uri="tcp://localhost:0" />
+        </amq:transportConnectors>
+
+        <amq:persistenceAdapter>
+            <amq:jdbcPersistenceAdapter dataSource="#dataSource" createTablesOnStartup="false" useDatabaseLock="false">
+                <amq:statements>
+                    <amq:statements tablePrefix="KC_" />
+                </amq:statements>
+            </amq:jdbcPersistenceAdapter>
+        </amq:persistenceAdapter>
+
+        <amq:destinationPolicy>
+            <amq:policyMap>
+                <amq:policyEntries>
+                    <!-- Set the following policy on all queues using the '>' wildcard -->
+                    <amq:policyEntry queue=">">
+                        <amq:deadLetterStrategy>
+                            <amq:individualDeadLetterStrategy
+                                    queuePrefix="DLQ." useQueueForQueueMessages="true" />
+                        </amq:deadLetterStrategy>
+                    </amq:policyEntry>
+                </amq:policyEntries>
+            </amq:policyMap>
+        </amq:destinationPolicy>
+
+        <amq:plugins>
+            <amq:redeliveryPlugin>
+                <amq:redeliveryPolicyMap>
+                    <amq:redeliveryPolicyMap>
+                        <amq:defaultEntry>
+                            <ref bean="defaultRedeliveryPolicy" />
+                        </amq:defaultEntry>
+                    </amq:redeliveryPolicyMap>
+                </amq:redeliveryPolicyMap>
+            </amq:redeliveryPlugin>
+        </amq:plugins>
+    </amq:broker>
+
+    <!-- XA JMS Connection Factory -->
+    <bean id="xaJmsConnectionFactory" class="bitronix.tm.resource.jms.PoolingConnectionFactory"
+          init-method="init" destroy-method="close" depends-on="embeddedBroker">
+        <property name="className" value="org.apache.activemq.ActiveMQXAConnectionFactory" />
+        <property name="uniqueName" value="${mq.datasource.uniqueName}" />
+        <property name="minPoolSize" value="${mq.datasource.minPoolSize}" />
+        <property name="maxPoolSize" value="${mq.datasource.maxPoolSize}" />
+        <property name="allowLocalTransactions" value="true" />
+        <property name="driverProperties">
+            <props>
+                <prop key="brokerURL">vm://localhost</prop>
+            </props>
+        </property>
+    </bean>
+
+    <!--  ActiveMQ REST destinations to use  -->
+    <amq:queue id="restDestination" physicalName="REST_QUEUE" />
+
+    <!-- REST Spring JMS Template -->
+    <bean id="restJmsOperations" class="org.springframework.jms.core.JmsTemplate">
+        <property name="connectionFactory" ref="xaJmsConnectionFactory" />
+        <property name="defaultDestination" ref="restDestination" />
+        <property name="deliveryPersistent" value="true" />
+        <property name="sessionTransacted" value="true" />
+    </bean>
+
+    <!-- the default destination to use for REST messages -->
+    <bean class="org.springframework.jms.listener.DefaultMessageListenerContainer">
+        <property name="connectionFactory" ref="xaJmsConnectionFactory" />
+        <property name="destination" ref="restDestination" />
+        <property name="messageListener" ref="restMessageConsumer" />
+        <property name="sessionAcknowledgeModeName" value="AUTO_ACKNOWLEDGE" />
+        <property name="transactionManager" ref="transactionManager" />
+    </bean>
+
+	<bean id="standardRestOperations" class="org.springframework.web.client.RestTemplate">
+		<property name="errorHandler">
+			<bean class="org.springframework.web.client.DefaultResponseErrorHandler" />
+		</property>
+	</bean>
+	<bean id="developmentRestOperations" parent="standardRestOperations">
+		<property name="requestFactory">
+			<bean class="org.kuali.coeus.sys.impl.rest.SSLVerficationBypassHttpRequestFactory" />
+		</property>
+		<property name="interceptors">
+			<list>
+				<bean class="org.kuali.coeus.sys.impl.rest.LoggingRequestInterceptor"/>
+			</list>
+		</property>
+	</bean>
+
+    <bean id="activeMqMessageLookupable" class="org.kuali.rice.kns.lookup.KualiLookupableImpl" scope="prototype">
+        <property name="lookupableHelperService" ref="activeMqMessageLookupableHelperService" />
+    </bean>
+
+    <bean id="genericJmsOperations" class="org.springframework.jms.core.JmsTemplate">
+        <property name="connectionFactory" ref="xaJmsConnectionFactory" />
+        <property name="deliveryPersistent" value="true" />
+        <property name="sessionTransacted" value="true" />
+    </bean>
+
+    <bean id="beanValidator"
+          class="org.springframework.validation.beanvalidation.LocalValidatorFactoryBean">
+    </bean>
+
+    <bean id="jdbcOperations" class="org.springframework.jdbc.core.JdbcTemplate">
+        <property name="dataSource" ref="dataSource" />
+    </bean>
+
+    <bean class="org.springframework.web.servlet.mvc.annotation.AnnotationMethodHandlerAdapter">
+        <property name="messageConverters">
+            <list>
+                <bean class="org.springframework.http.converter.ByteArrayHttpMessageConverter"/>
+                <bean class="org.springframework.http.converter.ResourceHttpMessageConverter"/>
+                <bean class="org.springframework.http.converter.StringHttpMessageConverter"/>
+                <bean class="org.springframework.http.converter.json.MappingJacksonHttpMessageConverter"/>
+                <bean class="org.springframework.http.converter.xml.SourceHttpMessageConverter"/>
+                <bean class="org.springframework.http.converter.xml.XmlAwareFormHttpMessageConverter"/>
+            </list>
+        </property>
+    </bean>
+
+    <util:map id="restPropertyEditors" key-type="java.lang.Class" value-type="java.beans.PropertyEditor">
+        <entry key="java.sql.Date">
+            <bean class="org.kuali.coeus.sys.framework.controller.rest.editor.CustomSqlDateEditor" />
+        </entry>
+        <entry key="java.sql.Timestamp">
+            <bean class="org.kuali.coeus.sys.framework.controller.rest.editor.CustomSqlTimestampEditor" />
+        </entry>
+        <entry key="java.time.Instant">
+            <bean class="org.kuali.coeus.sys.framework.controller.rest.editor.InstantCustomPropertyEditor" />
+        </entry>
+        <entry key="org.kuali.coeus.sys.api.model.ScaleTwoDecimal">
+            <bean class="org.kuali.coeus.sys.framework.model.ScaleTwoDecimalEditor">
+                <constructor-arg>
+                    <bean class="java.text.DecimalFormat">
+                        <constructor-arg value="##0.00"/>
+                    </bean>
+                </constructor-arg>
+                <constructor-arg value="true"/>
+            </bean>
+        </entry>
+    </util:map>
+
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.doctype.bo.DocumentType" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.doctype.DocumentTypePolicy" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krad.bo.DocumentHeader" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.permission.GenericPermissionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.GroupDocumentMember" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.GroupDocumentQualifier" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.rule.GroupRuleResponsibility" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.common.attribute.KimAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.KimDocumentRoleMember" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.KimDocumentRolePermission" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.KimDocumentRoleQualifier" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.KimDocumentRoleResponsibility" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.KimDocumentRoleResponsibilityAction" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.ken.bo.NotificationBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.ken.bo.NotificationChannelBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.ken.bo.NotificationChannelReviewerBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.ken.bo.NotificationContentTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.ken.bo.NotificationMessageDelivery" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.ken.bo.NotificationPriorityBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.ken.bo.NotificationProducerBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.ken.bo.NotificationRecipientBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.ken.bo.NotificationRecipientListBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.ken.bo.NotificationSenderBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.permission.PermissionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.permission.PermissionTemplateBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.PersonDocumentAddress" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.PersonDocumentAffiliation" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.PersonDocumentCitizenship" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.PersonDocumentEmail" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.PersonDocumentEmploymentInfo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.PersonDocumentGroup" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.PersonDocumentName" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.PersonDocumentPhone" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.PersonDocumentPrivacy" p:camelCasePluralName="PersonDocumentPrivacyEntries" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.PersonDocumentRole" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.rule.PersonRuleResponsibility" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.responsibility.ResponsibilityTemplateBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.responsibility.ReviewResponsibilityBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.RoleDocumentDelegation" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.RoleDocumentDelegationMember" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.bo.ui.RoleDocumentDelegationMemberQualifier" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.rule.bo.RuleAttribute" p:camelCasePluralName="KewRuleAttributes" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.rule.RuleBaseValues" p:camelCasePluralName="RuleBaseValues" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.rule.RuleDelegationBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.rule.RuleResponsibilityBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.rule.bo.RuleTemplateAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.rule.bo.RuleTemplateBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.rule.RuleTemplateOptionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.location.impl.state.StateBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.location.impl.county.CountyBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.location.impl.country.CountryBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.location.impl.campus.CampusBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.location.impl.campus.CampusTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.location.impl.postalcode.PostalCodeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.coreservice.impl.component.ComponentBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.coreservice.impl.component.DerivedComponentBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.coreservice.impl.namespace.NamespaceBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.coreservice.impl.parameter.ParameterTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.coreservice.impl.parameter.ParameterBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.coreservice.impl.style.StyleBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.ken.bo.UserChannelSubscriptionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.citizenship.EntityCitizenshipStatusBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.citizenship.EntityCitizenshipChangeTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.name.EntityNameTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.address.EntityAddressTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.affiliation.EntityAffiliationTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.external.EntityExternalIdentifierTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.employment.EntityEmploymentStatusBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.phone.EntityPhoneTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.employment.EntityEmploymentTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.personal.EntityEthnicityRaceTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.email.EntityEmailTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.residency.EntityResidencyStatusBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.residency.EntityResidencyTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.personal.EntityDisabilityAccomodationNeededBo" p:camelCasePluralName="EntityDisabilityAccomodationNeededEntries" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.type.KimTypeAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.role.RoleBoLite" p:camelCasePluralName="LiteViewRoles" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.residency.EntityResidencyBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.external.EntityExternalIdentifierBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.routeheader.DocumentRouteHeaderValue" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.phone.EntityPhoneBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.role.RoleResponsibilityBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.visa.EntityVisaBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.common.delegate.DelegateMemberAttributeDataBo" p:camelCasePluralName="DelegateMemberAttributeData" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.role.RoleMemberAttributeDataBo" p:camelCasePluralName="RoleMemberAttributeData" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.group.GroupAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.responsibility.ResponsibilityAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.permission.PermissionAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.privacy.EntityPrivacyPreferencesBo" p:camelCasePluralName="EntityPrivacyPreferences" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.group.GroupMemberBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.common.delegate.DelegateMemberBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.role.RoleMemberBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.type.KimTypeBo" />
+    <bean id="roleMembershipController" class="org.kuali.coeus.sys.impl.auth.RoleMembershipController" p:dataObjectClazz="org.kuali.rice.kim.impl.role.RoleBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.role.RoleResponsibilityActionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.responsibility.ResponsibilityBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krad.maintenance.MaintenanceDocumentBase" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krad.bo.Attachment" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krad.document.authorization.PessimisticLock" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krad.bo.DocumentAttachment" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krad.bo.MultiDocumentAttachment" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krad.bo.Note" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krad.bo.NoteType" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krad.bo.SessionDocument" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.employment.EntityEmploymentBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.role.RolePermissionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.address.EntityAddressBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.personal.EntityEthnicityBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.principal.PrincipalBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.citizenship.EntityCitizenshipBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.personal.EntityBioDemographicsBo" p:camelCasePluralName="EntityBioDemographics" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.affiliation.EntityAffiliationBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.EntityTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.common.delegate.DelegateTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.email.EntityEmailBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.name.EntityNameBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.entity.EntityBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.group.GroupBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krad.maintenance.MaintenanceLock" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.coreservice.impl.component.ComponentSetBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kcb.bo.Message" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kcb.bo.MessageDelivery" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kcb.bo.RecipientDelivererConfig" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kcb.bo.RecipientPreference" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.doctype.DocumentTypeAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.impl.peopleflow.PeopleFlowAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.impl.peopleflow.PeopleFlowBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.impl.peopleflow.PeopleFlowDelegateBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.impl.peopleflow.PeopleFlowMemberBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.impl.type.KewAttributeDefinitionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.impl.type.KewTypeAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.impl.type.KewTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.rule.RuleExtensionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.rule.RuleExtensionValue" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kew.useroptions.UserOptions" p:camelCasePluralName="UserOptions" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.EntityDefaultInfoCacheBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.kim.impl.identity.type.EntityTypeContactInfoBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.ActionAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.ActionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.AgendaAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.AgendaBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.AgendaItemBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.CategoryBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.ContextAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.ContextBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.ContextValidActionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.ContextValidAgendaBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.ContextValidRuleBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.ContextValidTermBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.FunctionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.FunctionParameterBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.KrmsAttributeDefinitionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.KrmsTypeAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.KrmsTypeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.PropositionBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.PropositionParameterBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.RuleAttributeBo" p:camelCasePluralName="RuleAttributes" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.RuleBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.TermBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.TermParameterBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.TermResolverAttributeBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.TermResolverBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.TermResolverParameterSpecificationBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.TermSpecificationBo" />
+    <bean parent="simpleCrudMapBasedRestController" p:dataObjectClazz="org.kuali.rice.krms.impl.repository.TypeTypeRelationBo" />
+
+</beans>

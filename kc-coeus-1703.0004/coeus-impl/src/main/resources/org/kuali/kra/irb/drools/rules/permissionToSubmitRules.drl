@@ -1,0 +1,48 @@
+/*
+ * Kuali Coeus, a comprehensive research administration system for higher education.
+ *
+ * Copyright 2005-2016 Kuali, Inc.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package org.kuali.kra.irb.drools.rules
+
+
+import org.kuali.kra.irb.actions.submit.ActionRightMapping;
+
+
+rule "Rule 1 -  104/105/106/108/114/115/116 And 303 And 101"
+salience 100
+when
+	actionRight : ActionRightMapping(actionTypeCode in ('104', '105','106','108','114','115','116','303','101'))
+then	
+    actionRight.setAllowed(true);
+    actionRight.setRightId("Submit Protocol");
+end
+rule "Rule 2 -  103"
+salience 100
+when
+	actionRight : ActionRightMapping(actionTypeCode in ('103'))
+then	
+    actionRight.setAllowed(true);
+    actionRight.setRightId("Create Ammendment");
+end
+rule "Rule 3 -  102"
+salience 100
+when
+	actionRight : ActionRightMapping(actionTypeCode in ('102'))
+then	
+    actionRight.setAllowed(true);
+    actionRight.setRightId("Create Renewal");
+end

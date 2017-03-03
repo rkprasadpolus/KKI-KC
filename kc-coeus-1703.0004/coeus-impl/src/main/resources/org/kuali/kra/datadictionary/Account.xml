@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+   - Kuali Coeus, a comprehensive research administration system for higher education.
+   -
+   - Copyright 2005-2016 Kuali, Inc.
+   -
+   - This program is free software: you can redistribute it and/or modify
+   - it under the terms of the GNU Affero General Public License as
+   - published by the Free Software Foundation, either version 3 of the
+   - License, or (at your option) any later version.
+   -
+   - This program is distributed in the hope that it will be useful,
+   - but WITHOUT ANY WARRANTY; without even the implied warranty of
+   - MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   - GNU Affero General Public License for more details.
+   -
+   - You should have received a copy of the GNU Affero General Public License
+   - along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ -->
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p" xsi:schemaLocation="http://www.springframework.org/schema/beans         http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <bean id="Account" parent="Account-parentBean" />
+    <bean id="Account-parentBean" abstract="true" parent="BusinessObjectEntry">
+        <property name="businessObjectClass" value="org.kuali.coeus.common.budget.framework.core.Account" />
+        <property name="objectLabel" value="Account" />
+        <property name="inquiryDefinition" >
+            <ref bean="Account-inquiryDefinition" />
+        </property>
+        <property name="lookupDefinition" >
+            <ref bean="Account-lookupDefinition" />
+        </property>
+        <property name="titleAttribute" value="Account" />
+        <property name="attributes" >
+            <list>
+                <ref bean="Account-code" />
+                <ref bean="Account-accountNumber" />
+                <ref bean="Account-description" />
+            </list>
+        </property>
+    </bean>
+
+    <!-- Attribute Definitions -->
+
+
+    <bean id="Account-code" parent="Account-code-parentBean" />
+    <bean id="Account-code-parentBean" abstract="true" parent="AttributeDefinition">
+        <property name="name" value="code" />
+        <property name="forceUppercase" value="false" />
+        <property name="label" value="Account code" />
+        <property name="shortLabel" value="Account code" />
+        <property name="maxLength" value="12" />
+        <property name="validationPattern" >
+            <bean parent="IntegerValidationPattern" p:allowNegative="true"/>
+        </property>
+        <property name="validCharactersConstraint">
+            <bean parent="IntegerPatternConstraint" p:allowNegative="true"/>
+        </property>
+        <property name="control" >
+            <bean parent="TextControlDefinition" p:size="12"/>
+        </property>
+        <property name="controlField">
+            <bean p:size="12" parent="Uif-TextControl"/>
+        </property>
+        <property name="summary" value="Account code" />
+        <property name="description" value="Account code" />
+    </bean>
+
+    <bean id="Account-accountNumber" parent="Account-accountNumber-parentBean" />
+    <bean id="Account-accountNumber-parentBean" abstract="true" parent="AttributeDefinition">
+        <property name="name" value="accountNumber" />
+        <property name="forceUppercase" value="false" />
+        <property name="label" value="Account number" />
+        <property name="shortLabel" value="Account number" />
+        <property name="maxLength" value="16" />
+        <property name="validationPattern" >
+            <bean parent="AlphaNumericValidationPattern">
+                <property name="allowUnderscore" value="true"/>
+                <property name="allowDash" value="true"/>
+                <property name="allowWhitespace" value="true"/>
+            </bean>
+        </property>
+        <property name="validCharactersConstraint">
+            <bean parent="AlphaNumericPatternConstraint">
+                <property name="allowUnderscore" value="true"/>
+                <property name="allowDash" value="true"/>
+                <property name="allowWhitespace" value="true"/>
+            </bean>
+        </property>
+        <property name="control" >
+            <bean parent="TextControlDefinition" p:size="16"/>
+        </property>
+        <property name="controlField">
+            <bean p:size="16" parent="Uif-TextControl"/>
+        </property>
+        <property name="summary" value="Account number" />
+        <property name="description" value="Account number" />
+    </bean>
+
+    <bean id="Account-description" parent="Account-description-parentBean" />
+    <bean id="Account-description-parentBean" abstract="true" parent="AttributeDefinition">
+        <property name="name" value="description" />
+        <property name="forceUppercase" value="false" />
+        <property name="required" value="false" />
+        <property name="label" value="Account description" />
+        <property name="shortLabel" value="Account description" />
+        <property name="maxLength" value="200" />
+        <property name="validationPattern" >
+            <bean parent="AlphaNumericValidationPattern">
+                <property name="allowUnderscore" value="true"/>
+                <property name="allowDash" value="true"/>
+                <property name="allowWhitespace" value="true"/>
+                <property name="allowPeriod" value="true"/>
+            </bean>
+        </property>
+        <property name="validCharactersConstraint">
+            <bean parent="AlphaNumericPatternConstraint">
+                <property name="allowUnderscore" value="true"/>
+                <property name="allowDash" value="true"/>
+                <property name="allowWhitespace" value="true"/>
+                <property name="allowPeriod" value="true"/>
+            </bean>
+        </property>
+        <property name="control" >
+            <bean parent="TextControlDefinition" p:size="200"/>
+        </property>
+        <property name="controlField">
+            <bean p:size="200" parent="Uif-TextControl"/>
+        </property>
+        <property name="summary" value="Account description" />
+        <property name="description" value="Account description" />
+    </bean>
+
+
+    <bean id="Account-versionNumber" parent="Account-versionNumber-parentBean" />
+    <bean id="Account-versionNumber-parentBean" abstract="true" parent="AttributeReferenceDummy-versionNumber"/>
+
+    <!-- Business Object Inquiry Definition -->
+    <bean id="Account-inquiryDefinition" parent="Account-inquiryDefinition-parentBean" />
+    <bean id="Account-InquiryView" parent="Account-InquiryView-parentBean"/>
+    <bean id="Account-inquiryDefinition-parentBean" abstract="true" parent="InquiryDefinition">
+        <property name="title" value="Account" />
+        <property name="inquirySections" >
+            <list>
+                <bean parent="InquirySectionDefinition">
+                    <property name="title" value="Account" />
+                    <property name="numberOfColumns" value="1" />
+                    <property name="inquiryFields" >
+                        <list>
+                            <bean parent="FieldDefinition" p:attributeName="code" p:forceInquiry="true"/>
+                            <bean parent="FieldDefinition" p:attributeName="accountNumber" p:forceInquiry="true"/>
+                            <bean parent="FieldDefinition" p:attributeName="description"/>
+                        </list>
+                    </property>
+                </bean>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="Account-InquiryView-parentBean" abstract="true" parent="Uif-InquiryView">
+        <property name="headerText" value="Account"/>
+        <property name="dataObjectClassName" value="org.kuali.coeus.common.budget.framework.core.Account"/>
+        <property name="items">
+            <list>
+                <bean parent="Uif-Disclosure-GridSection">
+                    <property name="headerText" value="Account"/>
+                    <property name="layoutManager.numberOfColumns" value="2"/>
+                    <property name="items">
+                        <list>
+                            <bean p:propertyName="code" parent="Uif-DataField"/>
+                            <bean p:propertyName="accountNumber" parent="Uif-DataField"/>
+                            <bean p:propertyName="description" parent="Uif-DataField"/>
+                        </list>
+                    </property>
+                </bean>
+            </list>
+        </property>
+    </bean>
+
+    <!-- Business Object Lookup Definition -->
+    <bean id="Account-lookupDefinition" parent="Account-lookupDefinition-parentBean" />
+    <bean id="Account-LookupView" parent="Account-LookupView-parentBean"/>
+    <bean id="Account-lookupDefinition-parentBean" abstract="true" parent="LookupDefinition">
+        <property name="title" value="Account Lookup" /><property name="defaultSort" >
+        <bean parent="SortDefinition"/>
+    </property>
+        <property name="lookupFields" >
+            <list>
+                <bean parent="FieldDefinition" p:attributeName="code"/>
+                <bean parent="FieldDefinition" p:attributeName="accountNumber"/>
+                <bean parent="FieldDefinition" p:attributeName="description"/>
+            </list>
+        </property>
+        <property name="resultFields">
+            <list>
+                <bean parent="FieldDefinition" p:attributeName="code" p:forceInquiry="true"/>
+                <bean parent="FieldDefinition" p:attributeName="accountNumber"/>
+                <bean parent="FieldDefinition" p:attributeName="description"/>
+            </list>
+        </property>
+    </bean>
+
+    <bean id="Account-LookupView-parentBean" abstract="true" parent="Uif-LookupView">
+        <property name="dataObjectClassName" value="org.kuali.coeus.common.budget.framework.core.Account"/>
+        <property name="headerText" value="Account Lookup"/>
+        <property name="criteriaFields">
+            <list>
+                <bean p:propertyName="code" parent="Uif-LookupCriteriaInputField"/>
+                <bean p:propertyName="accountNumber" parent="Uif-LookupCriteriaInputField"/>
+                <bean p:propertyName="description" parent="Uif-LookupCriteriaInputField"/>
+            </list>
+        </property>
+        <property name="resultFields" >
+            <list>
+                <bean p:propertyName="code" parent="Uif-DataField"/>
+                <bean p:propertyName="accountNumber" parent="Uif-DataField"/>
+                <bean p:propertyName="description" parent="Uif-DataField"/>
+            </list>
+        </property>
+    </bean>
+
+</beans>
